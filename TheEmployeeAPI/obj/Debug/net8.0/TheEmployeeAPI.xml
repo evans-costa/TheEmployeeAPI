@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>TheEmployeeAPI</name>
+    </assembly>
+    <members>
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.GetAllEmployees">
+            <summary>
+                Gets all the employees in the system
+            </summary>
+            <returns>An array of all employees.</returns>
+        </member>
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.GetEmployeeById(System.Int32)">
+            <summary>
+                Gets an employee by ID.
+            </summary>
+            <param name="id">The ID of the employee.</param>
+            <returns>The single employee record.</returns>
+        </member>
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.GetEmployeeBenefitsByEmployeeId(System.Int32)">
+            <summary>
+                Gets the benefits for an employee.
+            </summary>
+            <param name="employeeId">The ID to get the benefits for.</param>
+            <returns>The benefits for that employee.</returns>
+        </member>
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.CreateEmployee(TheEmployeeAPI.Models.CreateEmployeeRequest)">
+            <summary>
+                Creates a new employee.
+            </summary>
+            <param name="employeeRequest">The employee to be created.</param>
+            <returns>A link to the employee that was created.</returns>
+        </member>
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.UpdateEmployee(System.Int32,TheEmployeeAPI.Models.UpdateEmployeeRequest)">
+            <summary>
+                Updates an employee.
+            </summary>
+            <param name="id">The ID of the employee to update.</param>
+            <param name="employeeRequest">The employee data to update.</param>
+            <returns></returns>
+        </member>
+    </members>
+</doc>
