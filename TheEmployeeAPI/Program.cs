@@ -1,7 +1,9 @@
 using System.Globalization;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using TheEmployeeAPI;
 using TheEmployeeAPI.Data.Repositories;
+using TheEmployeeAPI.Infrastructure;
 using TheEmployeeAPI.Models;
 
 var defaultCulture = new CultureInfo("en-US");
@@ -20,6 +22,10 @@ builder.Services.AddProblemDetails();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllers(options => { options.Filters.Add<FluentValidationFilter>(); });
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.UseSqlite("Data Source=./Infrastructure/Database/employee.db");
+});
 
 var app = builder.Build();
 
