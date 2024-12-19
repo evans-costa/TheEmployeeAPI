@@ -2,9 +2,7 @@ using System.Globalization;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using TheEmployeeAPI;
-using TheEmployeeAPI.Data.Repositories;
 using TheEmployeeAPI.Infrastructure;
-using TheEmployeeAPI.Models;
 
 var defaultCulture = new CultureInfo("en-US");
 CultureInfo.DefaultThreadCurrentCulture = defaultCulture;
@@ -17,7 +15,6 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "TheEmployeeAPI.xml"));
 });
-builder.Services.AddSingleton<IRepository<Employee>, EmployeeRepository>();
 builder.Services.AddProblemDetails();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddHttpContextAccessor();
@@ -25,9 +22,12 @@ builder.Services.AddControllers(options => { options.Filters.Add<FluentValidatio
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseSqlite("Data Source=./Infrastructure/Database/employee.db");
+    options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
 });
 
 var app = builder.Build();
+
+SeedData.MigrateAndSeed(app.Services);
 
 if (app.Environment.IsDevelopment())
 {
@@ -37,7 +37,6 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.UseHttpsRedirection();
-
 app.Run();
 
 public partial class Program

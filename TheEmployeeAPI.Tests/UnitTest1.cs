@@ -1,36 +1,21 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using TheEmployeeAPI.Data.Repositories;
+using TheEmployeeAPI.Abstractions;
+using TheEmployeeAPI.Infrastructure;
 using TheEmployeeAPI.Models;
 
 namespace TheEmployeeAPI.Tests;
 
-public class BasicTests : IClassFixture<WebApplicationFactory<Program>>
+public class BasicTests : IClassFixture<CustomWebApplicationFactory>
 {
-    private readonly int _employeeId;
-    private readonly WebApplicationFactory<Program> _factory;
+    private const int EmployeeId = 1;
+    private readonly CustomWebApplicationFactory _factory;
 
-    public BasicTests(WebApplicationFactory<Program> factory)
+    public BasicTests(CustomWebApplicationFactory factory)
     {
         _factory = factory;
-
-        var repo = _factory.Services.GetRequiredService<IRepository<Employee>>();
-        var employee = new Employee
-        {
-            FirstName = "John",
-            LastName = "Smith",
-            Address1 = "123 Main Street",
-            Benefits =
-            [
-                new EmployeeBenefits { BenefitType = BenefitType.Health, Cost = 100 },
-                new EmployeeBenefits { BenefitType = BenefitType.Dental, Cost = 50 }
-            ]
-        };
-        repo.Create(employee);
-        _employeeId = repo.GetAll().First().Id;
     }
 
 
@@ -40,14 +25,35 @@ public class BasicTests : IClassFixture<WebApplicationFactory<Program>>
         var client = _factory.CreateClient();
         var response = await client.GetAsync("/employees");
 
+        if (!response.IsSuccessStatusCode)
+        {
+            var content = await response.Content.ReadAsStringAsync();
+            throw new Exception($"Failed to get employees: {content}");
+        }
+
+        var employees =
+            await response.Content.ReadFromJsonAsync<IEnumerable<GetEmployeeResponse>>();
+        Assert.NotEmpty(employees!);
+    }
+
+    [Fact]
+    public async Task GetAllEmployees_WithFilter_ReturnsOneResult()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/employees?FirstNameContains=John");
+
         response.EnsureSuccessStatusCode();
+
+        var employees =
+            await response.Content.ReadFromJsonAsync<IEnumerable<GetEmployeeResponse>>();
+        Assert.Single(employees!);
     }
 
     [Fact]
     public async Task GetEmployeeById_ReturnsOkResult()
     {
         var client = _factory.CreateClient();
-        var response = await client.GetAsync("/employees/1");
+        var response = await client.GetAsync($"/employees/{EmployeeId}");
 
         response.EnsureSuccessStatusCode();
     }
@@ -56,7 +62,7 @@ public class BasicTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetEmployeeBenefitsById_ReturnsOkResult()
     {
         var client = _factory.CreateClient();
-        var response = await client.GetAsync($"/employees/{_employeeId}/benefits");
+        var response = await client.GetAsync($"/employees/{EmployeeId}/benefits");
 
         response.EnsureSuccessStatusCode();
 
@@ -71,8 +77,8 @@ public class BasicTests : IClassFixture<WebApplicationFactory<Program>>
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync("/employees", new Employee
         {
-            FirstName = "John",
-            LastName = "Doe"
+            FirstName = "Peter",
+            LastName = "Moe"
         });
 
         response.EnsureSuccessStatusCode();
@@ -102,7 +108,7 @@ public class BasicTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task UpdateEmployee_ReturnsOkResult()
     {
         var client = _factory.CreateClient();
-        var response = await client.PutAsJsonAsync("/employees/1", new Employee
+        var response = await client.PutAsJsonAsync($"/employees/{EmployeeId}", new Employee
         {
             FirstName = "John",
             LastName = "Doe",
@@ -110,6 +116,11 @@ public class BasicTests : IClassFixture<WebApplicationFactory<Program>>
         });
 
         response.EnsureSuccessStatusCode();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var employee = await db.Employees.FindAsync(EmployeeId);
+        Assert.Equal("123 Main St", employee?.Address1);
     }
 
     [Fact]
@@ -118,12 +129,41 @@ public class BasicTests : IClassFixture<WebApplicationFactory<Program>>
         var client = _factory.CreateClient();
         var invalidEmployee = new UpdateEmployeeRequest();
 
-        var response = await client.PutAsJsonAsync($"/employees/{_employeeId}", invalidEmployee);
+        var response = await client.PutAsJsonAsync($"/employees/{EmployeeId}", invalidEmployee);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var problemDetails = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
         Assert.NotNull(problemDetails);
         Assert.Contains("Address1", problemDetails.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task DeleteEmployee_ReturnsNoContentResult()
+    {
+        var client = _factory.CreateClient();
+        var newEmployee = new Employee
+        {
+            FirstName = "Paul",
+            LastName = "Doe"
+        };
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Employees.Add(newEmployee);
+        await db.SaveChangesAsync();
+
+        var response = await client.DeleteAsync($"/employees/{newEmployee.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteEmployee_ReturnsNotFoundResult()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.DeleteAsync("/employees/99999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }

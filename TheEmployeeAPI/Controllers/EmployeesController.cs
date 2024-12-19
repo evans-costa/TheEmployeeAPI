@@ -1,19 +1,20 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using TheEmployeeAPI.Data.Repositories;
+using Microsoft.EntityFrameworkCore;
+using TheEmployeeAPI.Abstractions;
+using TheEmployeeAPI.Infrastructure;
 using TheEmployeeAPI.Models;
 
 namespace TheEmployeeAPI.Controllers;
 
 public class EmployeesController : BaseController
 {
+    private readonly AppDbContext _dbContext;
     private readonly ILogger<EmployeesController> _logger;
-    private readonly IRepository<Employee> _repository;
 
-    public EmployeesController(IRepository<Employee> repository,
-        ILogger<EmployeesController> logger)
+    public EmployeesController(ILogger<EmployeesController> logger, AppDbContext dbContext)
     {
-        _repository = repository;
         _logger = logger;
+        _dbContext = dbContext;
     }
 
     /// <summary>
@@ -23,10 +24,47 @@ public class EmployeesController : BaseController
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<GetEmployeeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public IActionResult GetAllEmployees()
+    public async Task<IActionResult> GetAllEmployees([FromQuery] GetAllEmployeesRequest? request)
     {
-        var employees = _repository.GetAll()
-            .Select(EmployeeToGetEmployeeResponse);
+        var page = request?.Page ?? 1;
+        var numberOfRecords = request?.RecordsPerPage ?? 100;
+
+        var query = _dbContext.Employees
+            .Include(e => e.Benefits)
+            .Skip((page - 1) * numberOfRecords)
+            .Take(numberOfRecords);
+
+        if (request is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(request.FirstNameContains))
+                query = query.Where(e => e.FirstName.Contains(request.FirstNameContains));
+
+            if (!string.IsNullOrWhiteSpace(request.LastNameContains))
+                query = query.Where(e => e.LastName.Contains(request.LastNameContains));
+        }
+
+        var employees = await query
+            .Select(employee => new GetEmployeeResponse
+            {
+                FirstName = employee.FirstName,
+                LastName = employee.LastName,
+                Address1 = employee.Address1,
+                Address2 = employee.Address2,
+                City = employee.City,
+                State = employee.State,
+                ZipCode = employee.ZipCode,
+                PhoneNumber = employee.PhoneNumber,
+                Email = employee.Email,
+                Benefits = employee.Benefits.Select(benefit =>
+                    new GetEmployeeResponseEmployeeBenefit
+                    {
+                        Id = benefit.Id,
+                        EmployeeId = benefit.EmployeeId,
+                        BenefitType = benefit.BenefitType,
+                        Cost = benefit.Cost
+                    }).ToList()
+            })
+            .ToArrayAsync();
 
         return Ok(employees);
     }
@@ -40,9 +78,9 @@ public class EmployeesController : BaseController
     [ProducesResponseType(typeof(GetEmployeeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public IActionResult GetEmployeeById(int id)
+    public async Task<IActionResult> GetEmployeeById(int id)
     {
-        var employee = _repository.GetById(id);
+        var employee = await _dbContext.Employees.SingleOrDefaultAsync(e => e.Id == id);
 
         if (employee == null) return NotFound();
 
@@ -54,16 +92,18 @@ public class EmployeesController : BaseController
     /// <summary>
     ///     Gets the benefits for an employee.
     /// </summary>
-    /// <param name="employeeId">The ID to get the benefits for.</param>
+    /// <param name="id">The ID to get the benefits for.</param>
     /// <returns>The benefits for that employee.</returns>
-    [HttpGet("{employeeId:int}/benefits")]
+    [HttpGet("{id:int}/benefits")]
     [ProducesResponseType(typeof(IEnumerable<GetEmployeeResponseEmployeeBenefit>),
         StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public IActionResult GetEmployeeBenefitsByEmployeeId(int employeeId)
+    public async Task<IActionResult> GetEmployeeBenefitsByEmployeeId(int id)
     {
-        var employee = _repository.GetById(employeeId);
+        var employee = await _dbContext.Employees
+            .Include(employee => employee.Benefits)
+            .SingleOrDefaultAsync(e => e.Id == id);
 
         if (employee == null) return NotFound();
 
@@ -79,7 +119,8 @@ public class EmployeesController : BaseController
     [ProducesResponseType(typeof(GetEmployeeResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest, Type = typeof(ValidationProblemDetails))]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public IActionResult CreateEmployee([FromBody] CreateEmployeeRequest employeeRequest)
+    public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeRequest
+        employeeRequest)
     {
         var newEmployee = new Employee
         {
@@ -95,7 +136,9 @@ public class EmployeesController : BaseController
             Email = employeeRequest.Email
         };
 
-        _repository.Create(newEmployee);
+        _dbContext.Employees.Add(newEmployee);
+        await _dbContext.SaveChangesAsync();
+
         return CreatedAtAction(nameof(GetEmployeeById), new { newEmployee.Id }, newEmployee);
     }
 
@@ -110,9 +153,13 @@ public class EmployeesController : BaseController
     [ProducesResponseType(StatusCodes.Status400BadRequest, Type = typeof(ValidationProblemDetails))]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public IActionResult UpdateEmployee(int id, [FromBody] UpdateEmployeeRequest employeeRequest)
+    public async Task<IActionResult> UpdateEmployee(int id,
+        [FromBody] UpdateEmployeeRequest
+            employeeRequest)
     {
-        var existingEmployee = _repository.GetById(id);
+        var existingEmployee = await _dbContext.Employees
+            .AsTracking()
+            .SingleOrDefaultAsync(e => e.Id == id);
 
         if (existingEmployee == null) return NotFound();
 
@@ -124,8 +171,29 @@ public class EmployeesController : BaseController
         existingEmployee.PhoneNumber = employeeRequest.PhoneNumber;
         existingEmployee.Email = employeeRequest.Email;
 
-        _repository.Update(existingEmployee);
+        await _dbContext.SaveChangesAsync();
         return Ok(existingEmployee);
+    }
+
+    /// <summary>
+    ///     Deletes an employee.
+    /// </summary>
+    /// <param name="id">The ID of the employee to delete.</param>
+    /// <returns></returns>
+    [HttpDelete("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> DeleteEmployee(int id)
+    {
+        var employee = await _dbContext.Employees.SingleOrDefaultAsync(e => e.Id == id);
+
+        if (employee == null) return NotFound();
+
+        _dbContext.Employees.Remove(employee);
+        await _dbContext.SaveChangesAsync();
+
+        return NoContent();
     }
 
     private static GetEmployeeResponse EmployeeToGetEmployeeResponse(Employee employee)

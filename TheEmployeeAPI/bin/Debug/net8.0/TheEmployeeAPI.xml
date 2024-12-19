@@ -4,7 +4,7 @@
         <name>TheEmployeeAPI</name>
     </assembly>
     <members>
-        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.GetAllEmployees">
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.GetAllEmployees(TheEmployeeAPI.Abstractions.GetAllEmployeesRequest)">
             <summary>
                 Gets all the employees in the system
             </summary>
@@ -21,22 +21,29 @@
             <summary>
                 Gets the benefits for an employee.
             </summary>
-            <param name="employeeId">The ID to get the benefits for.</param>
+            <param name="id">The ID to get the benefits for.</param>
             <returns>The benefits for that employee.</returns>
         </member>
-        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.CreateEmployee(TheEmployeeAPI.Models.CreateEmployeeRequest)">
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.CreateEmployee(TheEmployeeAPI.Abstractions.CreateEmployeeRequest)">
             <summary>
                 Creates a new employee.
             </summary>
             <param name="employeeRequest">The employee to be created.</param>
             <returns>A link to the employee that was created.</returns>
         </member>
-        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.UpdateEmployee(System.Int32,TheEmployeeAPI.Models.UpdateEmployeeRequest)">
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.UpdateEmployee(System.Int32,TheEmployeeAPI.Abstractions.UpdateEmployeeRequest)">
             <summary>
                 Updates an employee.
             </summary>
             <param name="id">The ID of the employee to update.</param>
             <param name="employeeRequest">The employee data to update.</param>
+            <returns></returns>
+        </member>
+        <member name="M:TheEmployeeAPI.Controllers.EmployeesController.DeleteEmployee(System.Int32)">
+            <summary>
+                Deletes an employee.
+            </summary>
+            <param name="id">The ID of the employee to delete.</param>
             <returns></returns>
         </member>
         <member name="T:TheEmployeeAPI.Infrastructure.Migrations.Initial">
